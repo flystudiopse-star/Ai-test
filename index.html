@@ -2382,6 +2382,20 @@
             await loadWeatherForCoordinates(lat, lng, name);
         });
 
+        document.getElementById('takeoffSelect').addEventListener('change', async function() {
+            const selectedValue = this.value;
+            if (!selectedValue) return;
+
+            const locationData = locations[selectedValue];
+            if (!locationData) return;
+
+            currentLocation = selectedValue;
+            document.getElementById('locationSearch').value = '';
+            document.getElementById('searchSuggestions').classList.remove('visible');
+
+            await loadWeatherForCoordinates(locationData.lat, locationData.lng, locationData.name);
+        });
+
         document.addEventListener('click', function(e) {
             const searchContainer = document.querySelector('.search-container');
             const suggestions = document.getElementById('searchSuggestions');
