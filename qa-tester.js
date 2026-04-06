@@ -20,6 +20,8 @@ class WeatherAppQA {
         this.analyzeCSS();
         this.analyzeJavaScript();
         this.verifyStructure();
+        this.checkLayoutIssues();
+        this.checkResponsiveDesign();
         this.generateReport();
     }
 
@@ -260,6 +262,197 @@ class WeatherAppQA {
                 });
             }
         });
+    }
+
+    checkLayoutIssues() {
+        console.log('--- Checking Layout Issues ---\n');
+        
+        const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+        const cssMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+        
+        if (!cssMatch) return;
+        
+        const css = cssMatch[1];
+        
+        const gridContainers = css.match(/display:\s*grid/gi) || [];
+        const flexContainers = css.match(/display:\s*flex/gi) || [];
+        
+        this.passedChecks.push(`Grid layouts found: ${gridContainers.length}`);
+        this.passedChecks.push(`Flex layouts found: ${flexContainers.length}`);
+        
+        const specialCardsGrid = css.match(/special-cards[\s\S]*?\{[^}]*display:\s*grid/i);
+        if (specialCardsGrid) {
+            const hasMobileBreakpoint = css.includes('.special-cards') && css.includes('grid-template-columns: 1fr');
+            if (hasMobileBreakpoint) {
+                this.passedChecks.push('Special-cards has mobile responsive grid');
+            } else {
+                this.issues.push({
+                    type: 'layout',
+                    severity: 'high',
+                    message: 'Special-cards grid missing mobile breakpoint',
+                    suggestion: 'Add @media query to make special-cards single-column on mobile'
+                });
+            }
+        }
+        
+        const gridWithoutGap = css.match(/display:\s*grid[^}]*?(?:gap|margin)[^}]*?;/gi);
+        if (gridContainers.length > 0 && !css.includes('gap:') && !css.includes('grid-gap')) {
+            this.issues.push({
+                type: 'layout',
+                severity: 'medium',
+                message: 'Grid containers may lack gap spacing',
+                suggestion: 'Add gap property to grid containers to prevent overlapping elements'
+            });
+        }
+        
+        const weatherGridMobile = css.match(/weather-grid[\s\S]*?@media.*max-width.*640px.*grid-template-columns:\s*1fr/i);
+        if (weatherGridMobile) {
+            this.passedChecks.push('Weather-grid has mobile breakpoint to single column');
+        } else {
+            this.issues.push({
+                type: 'layout',
+                severity: 'medium',
+                message: 'Weather-grid may not handle mobile properly',
+                suggestion: 'Verify weather-grid @media query switches to 1fr at 640px'
+            });
+        }
+        
+        const containerOverflow = css.match(/overflow-x:\s*hidden/i);
+        if (containerOverflow) {
+            this.passedChecks.push('Container has overflow-x: hidden to prevent horizontal scroll');
+        } else {
+            this.issues.push({
+                type: 'layout',
+                severity: 'medium',
+                message: 'No overflow-x handling found',
+                suggestion: 'Add overflow-x: hidden to container to prevent horizontal scroll issues'
+            });
+        }
+        
+        const specialCardsClasses = ['cloud-base-card', 'dewpoint-card'];
+        specialCardsClasses.forEach(cardClass => {
+            const hasCardStyles = css.includes(`.${cardClass}`);
+            if (!hasCardStyles) {
+                this.issues.push({
+                    type: 'layout',
+                    severity: 'high',
+                    message: `Missing styles for ${cardClass}`,
+                    suggestion: `Add styles for ${cardClass} in CSS`
+                });
+            }
+        });
+        
+        const cloudBaseCard = css.match(/cloud-base-card[\s\S]*?\{[^}]*\}/i);
+        const dewpointCard = css.match(/dewpoint-card[\s\S]*?\{[^}]*\}/i);
+        
+        if (cloudBaseCard && dewpointCard) {
+            const cloudBaseHasFlex = /display:\s*flex/i.test(cloudBaseCard[0]);
+            const dewpointHasFlex = /display:\s*flex/i.test(dewpointCard[0]);
+            
+            if (cloudBaseHasFlex && dewpointHasFlex) {
+                this.passedChecks.push('Cards use flexbox for internal layout');
+            }
+        }
+        
+        const hasNegativeMargins = css.match(/margin:\s*-\d+/gi);
+        if (hasNegativeMargins && hasNegativeMargins.length > 3) {
+            this.issues.push({
+                type: 'layout',
+                severity: 'medium',
+                message: 'Excessive negative margins may cause overlap',
+                suggestion: 'Review negative margin usage in CSS'
+            });
+        }
+    }
+
+    checkResponsiveDesign() {
+        console.log('--- Checking Responsive Design ---\n');
+        
+        const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+        const cssMatch = html.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+        
+        if (!cssMatch) return;
+        
+        const css = cssMatch[1];
+        
+        const mediaQueries = css.match(/@media[^{]+\{[\s\S]*?\}/gi) || [];
+        this.passedChecks.push(`Media queries found: ${mediaQueries.length}`);
+        
+        const breakpoints = {
+            mobile: css.includes('max-width: 640px') || css.includes('max-width: 480px'),
+            tablet: css.includes('max-width: 768px'),
+            desktop: css.includes('max-width: 1024px')
+        };
+        
+        if (breakpoints.mobile) {
+            this.passedChecks.push('Mobile breakpoint (640px or 480px) defined');
+        } else {
+            this.issues.push({
+                type: 'responsive',
+                severity: 'high',
+                message: 'No mobile breakpoint found',
+                suggestion: 'Add @media (max-width: 640px) for mobile layout'
+            });
+        }
+        
+        if (breakpoints.tablet) {
+            this.passedChecks.push('Tablet breakpoint (768px) defined');
+        }
+        
+        if (breakpoints.desktop) {
+            this.passedChecks.push('Desktop breakpoint (1024px) defined');
+        }
+        
+        const bodyOverflow = css.match(/body[\s\S]*?\{[^}]*overflow-x:\s*hidden/i);
+        if (bodyOverflow) {
+            this.passedChecks.push('Body has overflow-x handling');
+        } else {
+            this.issues.push({
+                type: 'responsive',
+                severity: 'medium',
+                message: 'Body may not handle overflow at small widths',
+                suggestion: 'Add overflow-x: hidden to body to prevent horizontal scroll'
+            });
+        }
+        
+        const flexWrap = css.match(/flex-wrap:\s*wrap/i);
+        const gridAutoFlow = css.match(/grid-template-columns:\s*repeat\(\d+/i);
+        
+        if (flexWrap || gridAutoFlow) {
+            this.passedChecks.push('Layout uses wrap/auto-flow for responsive behavior');
+        }
+        
+        const hasContainerMaxWidth = css.match(/(?:container|wrapper)[\s\S]*?max-width/i);
+        if (hasContainerMaxWidth) {
+            this.passedChecks.push('Container has max-width for responsive layout');
+        }
+        
+        const viewportMeta = html.match(/<meta[^>]*name="viewport"/i);
+        if (viewportMeta) {
+            this.passedChecks.push('Viewport meta tag present');
+        } else {
+            this.issues.push({
+                type: 'responsive',
+                severity: 'critical',
+                message: 'Viewport meta tag missing',
+                suggestion: 'Add <meta name="viewport" content="width=device-width, initial-scale=1.0">'
+            });
+        }
+        
+        const gridColumns = css.match(/grid-template-columns:\s*repeat\((\d+)/i);
+        if (gridColumns && parseInt(gridColumns[1]) > 1) {
+            const hasMobileGridFix = css.match(/@media[^{]*max-width[^{]*\{[^}]*grid-template-columns:\s*1fr/i);
+            if (hasMobileGridFix) {
+                this.passedChecks.push('Multi-column grid has mobile single-column fallback');
+            } else {
+                this.issues.push({
+                    type: 'responsive',
+                    severity: 'high',
+                    message: 'Multi-column grid may not collapse on mobile',
+                    suggestion: 'Add @media query to change grid to single column on mobile'
+                });
+            }
+        }
     }
 
     generateReport() {
