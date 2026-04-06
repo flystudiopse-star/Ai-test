@@ -35,7 +35,6 @@
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
-            overflow-x: hidden;
         }
 
         .background-mesh {
@@ -61,7 +60,6 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 24px 20px;
-            overflow-x: hidden;
         }
 
         header {
@@ -267,6 +265,10 @@
                 width: 180px;
                 height: 180px;
             }
+
+            .special-cards:last-of-type {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 640px) {
@@ -446,6 +448,12 @@
             }
         }
 
+        @media (max-width: 768px) {
+            .special-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
         @media (max-width: 640px) {
             .weather-grid {
                 grid-template-columns: 1fr;
@@ -618,6 +626,10 @@
             margin-bottom: 48px;
         }
 
+        .special-cards:last-of-type {
+            margin-bottom: 32px;
+        }
+
         @media (max-width: 640px) {
             .thermal-section {
                 padding: 16px;
@@ -633,6 +645,31 @@
 
             .rating-item {
                 flex-direction: row;
+            }
+
+            .special-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .cloud-base-card,
+            .dewpoint-card {
+                padding: 16px;
+            }
+
+            .cloud-icon-container,
+            .dewpoint-icon {
+                width: 48px;
+                height: 48px;
+            }
+
+            .cloud-icon-container svg {
+                width: 28px;
+                height: 28px;
+            }
+
+            .dewpoint-icon svg {
+                width: 24px;
+                height: 24px;
             }
         }
 
@@ -1023,14 +1060,23 @@
             color: var(--accent-amber);
         }
 
+        .best-hours-display,
         .trend-indicator {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 16px;
+            gap: 16px;
+            padding: 20px;
             background: var(--bg-card);
             border: 1px solid var(--border-card);
             border-radius: 16px;
+        }
+
+        @media (max-width: 640px) {
+            .best-hours-display,
+            .trend-indicator {
+                flex-direction: column;
+                text-align: center;
+            }
         }
 
         .trend-icon {
