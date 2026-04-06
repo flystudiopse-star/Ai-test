@@ -181,6 +181,41 @@
             margin-bottom: 16px;
         }
 
+        .forecast-selector {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .forecast-select {
+            padding: 10px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .forecast-select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 15px rgba(34, 211, 238, 0.15);
+        }
+
+        .forecast-time-label {
+            font-family: var(--font-mono);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            background: rgba(34, 211, 238, 0.1);
+            padding: 6px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(34, 211, 238, 0.2);
+        }
+
         .condition-badge {
             display: inline-flex;
             align-items: center;
@@ -891,6 +926,21 @@
             <div class="hero-content">
                 <h2><span class="location-name" id="locationName">Białystok, Polska</span></h2>
                 <p class="conditions-summary" id="conditionsSummary">Warunki idealne do lotu</p>
+                <div class="forecast-selector">
+                    <select id="forecastSelect" class="forecast-select">
+                        <option value="now">Teraz</option>
+                        <option value="1h">+1 godzina</option>
+                        <option value="2h">+2 godziny</option>
+                        <option value="3h">+3 godziny</option>
+                        <option value="6h">+6 godzin</option>
+                        <option value="12h">+12 godzin</option>
+                        <option value="24h">+24 godziny</option>
+                        <option value="1d">+1 dzień</option>
+                        <option value="2d">+2 dni</option>
+                        <option value="3d">+3 dni</option>
+                    </select>
+                    <span class="forecast-time-label" id="forecastTimeLabel">Pogoda na teraz</span>
+                </div>
                 <div class="condition-badge flyable" id="conditionBadge">
                     <span>LOTOWY</span>
                 </div>
@@ -1103,23 +1153,74 @@
                 this.precipitation = data.precipitation ?? 0;
                 this.weatherCondition = data.weatherCondition ?? 'clear';
                 this.lastUpdated = data.lastUpdated ?? new Date();
+                this.forecastTimeLabel = data.forecastTimeLabel ?? 'Pogoda na teraz';
             }
 
-            static createFromOpenMeteo(apiData) {
+            static createFromOpenMeteo(apiData, forecastType = 'now') {
                 const current = apiData.current ?? {};
+                const hourly = apiData.hourly ?? {};
                 const daily = apiData.daily ?? {};
                 
-                const temp = current.temperature_2m ?? 20;
-                const humidity = current.relative_humidity_2m ?? 50;
-                const dewPoint = current.dew_point_2m ?? 10;
-                const pressure = current.surface_pressure ?? 1013;
-                const windSpeed = current.wind_speed_10m ?? 0;
-                const windGusts = current.wind_gusts_10m ?? 0;
-                const windDir = current.wind_direction_10m ?? 0;
-                const precip = current.precipitation ?? 0;
-                const cloudCover = current.cloud_cover ?? 0;
-                const weatherCode = current.weather_code ?? 0;
-                const apparentTemp = current.apparent_temperature ?? temp;
+                let temp, humidity, dewPoint, pressure, windSpeed, windGusts, windDir, precip, cloudCover, weatherCode, apparentTemp;
+                let forecastTimeLabel = 'Teraz';
+                let forecastHours = 0;
+                
+                if (forecastType === 'now') {
+                    temp = current.temperature_2m ?? 20;
+                    humidity = current.relative_humidity_2m ?? 50;
+                    dewPoint = current.dew_point_2m ?? 10;
+                    pressure = current.surface_pressure ?? 1013;
+                    windSpeed = current.wind_speed_10m ?? 0;
+                    windGusts = current.wind_gusts_10m ?? 0;
+                    windDir = current.wind_direction_10m ?? 0;
+                    precip = current.precipitation ?? 0;
+                    cloudCover = current.cloud_cover ?? 0;
+                    weatherCode = current.weather_code ?? 0;
+                    apparentTemp = current.apparent_temperature ?? temp;
+                    forecastTimeLabel = 'Pogoda na teraz';
+                } else {
+                    const hoursMap = { '1h': 1, '2h': 2, '3h': 3, '6h': 6, '12h': 12, '24h': 24 };
+                    const daysMap = { '1d': 24, '2d': 48, '3d': 72 };
+                    
+                    if (hoursMap[forecastType]) {
+                        forecastHours = hoursMap[forecastType];
+                    } else if (daysMap[forecastType]) {
+                        forecastHours = daysMap[forecastType];
+                    }
+                    
+                    const hourIndex = forecastHours;
+                    const hourlyTime = hourly.time ?? [];
+                    const idx = hourlyTime.findIndex((t, i) => {
+                        const hourDate = new Date(t);
+                        const now = new Date();
+                        const diffHours = Math.round((hourDate - now) / (1000 * 60 * 60));
+                        return diffHours >= forecastHours;
+                    });
+                    
+                    const finalIdx = idx >= 0 ? idx : hourIndex;
+                    temp = hourly.temperature_2m?.[finalIdx] ?? 20;
+                    humidity = hourly.relative_humidity_2m?.[finalIdx] ?? 50;
+                    dewPoint = hourly.dew_point_2m?.[finalIdx] ?? 10;
+                    pressure = hourly.surface_pressure?.[finalIdx] ?? 1013;
+                    windSpeed = hourly.wind_speed_10m?.[finalIdx] ?? 0;
+                    windGusts = hourly.wind_gusts_10m?.[finalIdx] ?? 0;
+                    windDir = hourly.wind_direction_10m?.[finalIdx] ?? 0;
+                    precip = hourly.precipitation?.[finalIdx] ?? 0;
+                    cloudCover = hourly.cloud_cover?.[finalIdx] ?? 0;
+                    weatherCode = hourly.weather_code?.[finalIdx] ?? 0;
+                    apparentTemp = hourly.apparent_temperature?.[finalIdx] ?? temp;
+                    
+                    if (forecastHours >= 24) {
+                        const days = Math.floor(forecastHours / 24);
+                        forecastTimeLabel = `Pogoda na +${days} ${days === 1 ? 'dzień' : days === 2 ? 'dni' : 'dni'}`;
+                    } else {
+                        const forecastDate = new Date();
+                        forecastDate.setHours(forecastDate.getHours() + forecastHours);
+                        const hours = forecastDate.getHours();
+                        const timeStr = `${hours.toString().padStart(2, '0')}:00`;
+                        forecastTimeLabel = `Pogoda na +${forecastHours}h (${timeStr})`;
+                    }
+                }
                 
                 const dewPointSpread = temp - dewPoint;
                 const cloudBase = Math.max(300, 3000 - (cloudCover * 25) - (temp * 20));
@@ -1138,7 +1239,8 @@
                     thermalActivity: OpenMeteoClient.calculateThermalActivity(temp, humidity, windSpeed),
                     thermalVelocity: Math.round(OpenMeteoClient.calculateThermalVelocity(temp, humidity) * 10) / 10,
                     precipitation: precip,
-                    weatherCondition: OpenMeteoClient.getWeatherCondition(weatherCode)
+                    weatherCondition: OpenMeteoClient.getWeatherCondition(weatherCode),
+                    forecastTimeLabel: forecastTimeLabel
                 });
             }
 
@@ -1158,7 +1260,8 @@
                     thermalVelocity: this.thermalVelocity,
                     precipitation: this.precipitation,
                     weatherCondition: this.weatherCondition,
-                    lastUpdated: this.lastUpdated
+                    lastUpdated: this.lastUpdated,
+                    forecastTimeLabel: this.forecastTimeLabel
                 };
             }
         }
@@ -1166,7 +1269,10 @@
         const OpenMeteoClient = {
             BASE_URL: 'https://api.open-meteo.com/v1/forecast',
             
-            async fetchWeather(lat, lng) {
+            async fetchWeather(lat, lng, forecastType = 'now') {
+                const isDayForecast = ['1h', '2h', '3h', '6h', '12h', '24h'].includes(forecastType);
+                const forecastDays = isDayForecast ? 2 : 4;
+                
                 const params = new URLSearchParams({
                     latitude: lat.toFixed(4),
                     longitude: lng.toFixed(4),
@@ -1183,9 +1289,22 @@
                         'wind_gusts_10m',
                         'dew_point_2m'
                     ].join(','),
+                    hourly: [
+                        'temperature_2m',
+                        'relative_humidity_2m',
+                        'apparent_temperature',
+                        'precipitation',
+                        'weather_code',
+                        'cloud_cover',
+                        'surface_pressure',
+                        'wind_speed_10m',
+                        'wind_direction_10m',
+                        'wind_gusts_10m',
+                        'dew_point_2m'
+                    ].join(','),
                     daily: ['weather_code', 'temperature_2m_max', 'temperature_2m_min'].join(','),
                     timezone: 'auto',
-                    forecast_days: 1
+                    forecast_days: forecastDays
                 });
                 
                 const url = `${this.BASE_URL}?${params.toString()}`;
@@ -1196,7 +1315,7 @@
                 }
                 
                 const data = await response.json();
-                return WeatherData.createFromOpenMeteo(data);
+                return WeatherData.createFromOpenMeteo(data, forecastType);
             },
 
             degreesToCompass(degrees) {
@@ -1266,6 +1385,7 @@
         };
 
         let currentLocation = 'bialystok';
+        let currentForecastType = 'now';
         let weatherData = new WeatherData();
         let useApiData = true;
 
@@ -1274,20 +1394,41 @@
             return base + (Math.random() * 2 - 1) * variation;
         }
 
-        function generateWeatherData(location) {
+        function generateWeatherData(location, forecastType = 'now') {
             const locationData = locations[location];
             const base = locationData ? 18 : 20;
             
-            const temp = Math.round(randomVariation(base, 0.1));
+            const hoursMap = { '1h': 1, '2h': 2, '3h': 3, '6h': 6, '12h': 12, '24h': 24 };
+            const daysMap = { '1d': 24, '2d': 48, '3d': 72 };
+            
+            let forecastTimeLabel = 'Pogoda na teraz';
+            const variation = (forecastType !== 'now') ? (hoursMap[forecastType] || daysMap[forecastType] || 0) * 0.15 : 0;
+            
+            const temp = Math.round(randomVariation(base + variation, 0.1));
             const feelsLike = Math.round(randomVariation(temp - 1, 0.3));
-            const windSpeed = Math.round(randomVariation(12, 0.4));
+            const windSpeed = Math.round(randomVariation(12 + variation * 0.5, 0.4));
             const windGusts = windSpeed + Math.round(randomVariation(6, 0.5));
-            const humidity = Math.round(randomVariation(45, 0.2));
-            const pressure = Math.round(randomVariation(1015, 0.02));
-            const visibility = Math.round(randomVariation(15, 0.15));
-            const cloudBase = Math.round(randomVariation(1200, 0.25));
-            const dewPointSpread = Math.round(randomVariation(8, 0.3));
-
+            const humidity = Math.round(randomVariation(45 - variation * 2, 0.2));
+            const pressure = Math.round(randomVariation(1015 - variation * 0.5, 0.02));
+            const visibility = Math.round(randomVariation(15 - variation * 0.3, 0.15));
+            const cloudBase = Math.round(randomVariation(1200 - variation * 20, 0.25));
+            const dewPointSpread = Math.round(randomVariation(8 - variation * 0.2, 0.3));
+            
+            if (forecastType !== 'now') {
+                const hours = hoursMap[forecastType];
+                const days = daysMap[forecastType];
+                if (days) {
+                    const dayNum = days / 24;
+                    const dayLabel = dayNum === 1 ? 'dzień' : 'dni';
+                    forecastTimeLabel = `Pogoda na +${dayNum} ${dayLabel}`;
+                } else if (hours) {
+                    const forecastDate = new Date();
+                    forecastDate.setHours(forecastDate.getHours() + hours);
+                    const timeStr = `${forecastDate.getHours().toString().padStart(2, '0')}:00`;
+                    forecastTimeLabel = `Pogoda na +${hours}h (${timeStr})`;
+                }
+            }
+            
             return new WeatherData({
                 temperature: temp,
                 feelsLike: feelsLike,
@@ -1301,7 +1442,8 @@
                 windDirection: getWindDirection(windSpeed),
                 thermalActivity: getThermalActivity(windSpeed, humidity),
                 thermalVelocity: Math.round(randomVariation(2.5, 0.4)),
-                precipitation: 0
+                precipitation: 0,
+                forecastTimeLabel: forecastTimeLabel
             });
         }
 
@@ -1317,18 +1459,18 @@
             return 'weak';
         }
 
-        async function loadWeatherFromApi(locationKey) {
+        async function loadWeatherFromApi(locationKey, forecastType = 'now') {
             const location = locations[locationKey];
             if (!location) {
-                return generateWeatherData(locationKey);
+                return generateWeatherData(locationKey, forecastType);
             }
             
             try {
-                const data = await OpenMeteoClient.fetchWeather(location.lat, location.lng);
+                const data = await OpenMeteoClient.fetchWeather(location.lat, location.lng, forecastType);
                 return data;
             } catch (error) {
                 console.warn('API fetch failed, using simulated data:', error);
-                return generateWeatherData(locationKey);
+                return generateWeatherData(locationKey, forecastType);
             }
         }
 
@@ -1443,6 +1585,7 @@
             document.getElementById('cloudBase').textContent = data.cloudBase;
             document.getElementById('dewPointSpread').textContent = data.dewPointSpread;
             document.getElementById('windDirection').textContent = data.windDirection;
+            document.getElementById('forecastTimeLabel').textContent = data.forecastTimeLabel || 'Pogoda na teraz';
 
             const summaryText = data.weatherCondition === 'clear' ? 'Czyste niebo' :
                             data.weatherCondition === 'partly_cloudy' ? 'Częściowe zachmurzenie' :
@@ -1587,10 +1730,10 @@
         async function loadWeather() {
             if (useApiData) {
                 previousWeatherData = weatherData;
-                weatherData = await loadWeatherFromApi(currentLocation);
+                weatherData = await loadWeatherFromApi(currentLocation, currentForecastType);
             } else {
                 previousWeatherData = weatherData;
-                weatherData = generateWeatherData(currentLocation);
+                weatherData = generateWeatherData(currentLocation, currentForecastType);
             }
             updateDisplay();
         }
@@ -1609,6 +1752,11 @@
                     await loadWeather();
                 }
             }
+        });
+
+        document.getElementById('forecastSelect').addEventListener('change', async function() {
+            currentForecastType = this.value;
+            await loadWeather();
         });
 
         loadWeather();
