@@ -889,7 +889,7 @@
 
         <section class="hero">
             <div class="hero-content">
-                <h2><span class="location-name" id="locationName">Bled, Słowenia</span></h2>
+                <h2><span class="location-name" id="locationName">Białystok, Polska</span></h2>
                 <p class="conditions-summary" id="conditionsSummary">Warunki idealne do lotu</p>
                 <div class="condition-badge flyable" id="conditionBadge">
                     <span>LOTOWY</span>
@@ -1257,6 +1257,7 @@
         };
 
         const locations = {
+            'bialystok': { name: 'Białystok, Polska', lat: 53.1325, lng: 23.1593 },
             'bled': { name: 'Bled, Słowenia', lat: 46.3625, lng: 14.0939 },
             'interlaken': { name: 'Interlaken, Szwajcaria', lat: 46.6863, lng: 7.8632 },
             'alpe-dhuez': { name: 'Alpe d\'Huez, Francja', lat: 45.0914, lng: 6.0689 },
@@ -1264,7 +1265,7 @@
             'olsberg': { name: 'Olsberg, Niemcy', lat: 51.3565, lng: 8.4897 }
         };
 
-        let currentLocation = 'bled';
+        let currentLocation = 'bialystok';
         let weatherData = new WeatherData();
         let useApiData = true;
 
