@@ -111,14 +111,16 @@
 
         .search-container {
             position: relative;
+            display: flex;
+            gap: 12px;
             flex: 1;
-            max-width: 360px;
+            max-width: 520px;
             min-width: 200px;
         }
 
         .search-input {
-            width: 100%;
-            padding: 12px 16px 12px 44px;
+            flex: 1;
+            padding: 12px 16px;
             background: var(--bg-card);
             border: 1px solid var(--border-card);
             border-radius: 12px;
@@ -138,14 +140,33 @@
             color: var(--text-secondary);
         }
 
-        .search-icon {
-            position: absolute;
-            left: 14px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 20px;
-            height: 20px;
-            fill: var(--text-secondary);
+        .popular-takeoffs-select {
+            padding: 12px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            color: var(--text-primary);
+            font-family: var(--font-body);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 160px;
+        }
+
+        .popular-takeoffs-select:focus {
+            outline: none;
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 20px rgba(34, 211, 238, 0.15);
+        }
+
+        .popular-takeoffs-select:hover {
+            border-color: var(--accent-cyan);
+        }
+
+        .popular-takeoffs-select option {
+            background: var(--bg-card);
+            color: var(--text-primary);
+            padding: 8px;
         }
 
         .hero {
@@ -882,8 +903,18 @@
             </div>
             
             <div class="search-container">
-                <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
                 <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację...">
+                <select class="popular-takeoffs-select" id="takeoffSelect">
+                    <option value="">Popularne starty</option>
+                    <option value="zakopane">Zakopane (Tatry)</option>
+                    <option value="gora-zar">Góra Żar (Beskidy)</option>
+                    <option value="krosno">Krosno (Bieszczady)</option>
+                    <option value="szczecin">Lotnisko Szczecin</option>
+                    <option value="wroclaw">Wrocław (lotnisko)</option>
+                    <option value="czestochowa">Częstochowa (lotnisko)</option>
+                    <option value="bialystok">Białystok (lotnisko)</option>
+                    <option value="poznan">Poznań (lotnisko)</option>
+                </select>
             </div>
         </header>
 
@@ -1262,7 +1293,14 @@
             'interlaken': { name: 'Interlaken, Szwajcaria', lat: 46.6863, lng: 7.8632 },
             'alpe-dhuez': { name: 'Alpe d\'Huez, Francja', lat: 45.0914, lng: 6.0689 },
             'cervo': { name: 'Cervo, Włochy', lat: 43.9052, lng: 7.9511 },
-            'olsberg': { name: 'Olsberg, Niemcy', lat: 51.3565, lng: 8.4897 }
+            'olsberg': { name: 'Olsberg, Niemcy', lat: 51.3565, lng: 8.4897 },
+            'zakopane': { name: 'Zakopane (Tatry), Polska', lat: 49.2990, lng: 19.9493 },
+            'gora-zar': { name: 'Góra Żar (Beskidy), Polska', lat: 49.6625, lng: 19.2000 },
+            'krosno': { name: 'Krosno (Bieszczady), Polska', lat: 49.6872, lng: 21.8308 },
+            'szczecin': { name: 'Lotnisko Szczecin, Polska', lat: 53.3653, lng: 14.6292 },
+            'wroclaw': { name: 'Wrocław (lotnisko), Polska', lat: 51.1063, lng: 16.8879 },
+            'czestochowa': { name: 'Częstochowa (lotnisko), Polska', lat: 50.8122, lng: 19.0801 },
+            'poznan': { name: 'Poznań (lotnisko), Polska', lat: 52.4213, lng: 16.8900 }
         };
 
         let currentLocation = 'bialystok';
@@ -1608,6 +1646,15 @@
                     currentLocation = query;
                     await loadWeather();
                 }
+            }
+        });
+
+        document.getElementById('takeoffSelect').addEventListener('change', async function() {
+            const selectedLocation = this.value;
+            if (selectedLocation && locations[selectedLocation]) {
+                currentLocation = selectedLocation;
+                await loadWeather();
+                document.getElementById('locationSearch').value = '';
             }
         });
 
