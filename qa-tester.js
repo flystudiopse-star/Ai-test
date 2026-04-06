@@ -20,7 +20,103 @@ class WeatherAppQA {
         this.analyzeCSS();
         this.analyzeJavaScript();
         this.verifyStructure();
+        await this.verifyDeployment();
         this.generateReport();
+    }
+
+    async verifyDeployment() {
+        console.log('--- Verifying Deployment ---\n');
+        
+        const deploymentUrl = 'https://skypulse-weather.vercel.app';
+        
+        try {
+            const https = require('https');
+            const http = require('http');
+            
+            const makeRequest = (url) => {
+                return new Promise((resolve, reject) => {
+                    const protocol = url.startsWith('https') ? https : http;
+                    const req = protocol.get(url, { timeout: 15000 }, (res) => {
+                        let data = '';
+                        res.on('data', chunk => data += chunk);
+                        res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: data }));
+                    });
+                    req.on('error', reject);
+                    req.on('timeout', () => reject(new Error('Request timeout')));
+                });
+            };
+            
+            const response = await makeRequest(deploymentUrl);
+            
+            if (response.status === 200) {
+                this.passedChecks.push(`Deployment: ${deploymentUrl} accessible`);
+                this.passedChecks.push(`Deployment: HTTP ${response.status} OK`);
+                
+                const body = response.body;
+                
+                const contentChecks = [
+                    { pattern: /<!DOCTYPE html>/i, name: 'Valid HTML document' },
+                    { pattern: /SkyPulse/i, name: 'SkyPulse branding present' },
+                    { pattern: /<script/i, name: 'JavaScript present' },
+                    { pattern: /weather/i, name: 'Weather content present' }
+                ];
+                
+                contentChecks.forEach(check => {
+                    if (check.pattern.test(body)) {
+                        this.passedChecks.push(`Deployment: ${check.name}`);
+                    } else {
+                        this.issues.push({
+                            type: 'deployment',
+                            severity: 'high',
+                            message: `Deployment content check failed: ${check.name}`,
+                            suggestion: `Verify ${deploymentUrl} has correct content`
+                        });
+                    }
+                });
+                
+                const htmlSize = Buffer.byteLength(body, 'utf8');
+                this.passedChecks.push(`Deployment: Page size ${(htmlSize / 1024).toFixed(1)}KB`);
+                
+                const responsiveChecks = [
+                    { pattern: /@media\s*\(\s*max-width:\s*640px/i, name: 'Mobile breakpoint' },
+                    { pattern: /@media\s*\(\s*max-width:\s*768px/i, name: 'Tablet breakpoint' },
+                    { pattern: /@media\s*\(\s*(max-width|min-width)\s*:\s*1024px/i, name: 'Desktop breakpoint' }
+                ];
+                
+                let cssMatch = body.match(/<style[^>]*>([\s\S]*?)<\/style>/);
+                if (cssMatch) {
+                    const css = cssMatch[1];
+                    responsiveChecks.forEach(check => {
+                        if (check.pattern.test(css)) {
+                            this.passedChecks.push(`Responsive: ${check.name}`);
+                        } else {
+                            this.issues.push({
+                                type: 'responsive',
+                                severity: 'medium',
+                                message: `Missing ${check.name} in CSS`,
+                                suggestion: 'Add responsive breakpoint for mobile/tablet/desktop'
+                            });
+                        }
+                    });
+                }
+                
+            } else {
+                this.issues.push({
+                    type: 'deployment',
+                    severity: 'critical',
+                    message: `Deployment returned HTTP ${response.status}`,
+                    suggestion: `Check ${deploymentUrl} for errors`
+                });
+            }
+            
+        } catch (error) {
+            this.issues.push({
+                type: 'deployment',
+                severity: 'critical',
+                message: `Deployment verification failed: ${error.message}`,
+                suggestion: `Verify ${deploymentUrl} is accessible and deployed correctly`
+            });
+        }
     }
 
     async checkCodeChanges() {

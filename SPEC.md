@@ -127,3 +127,29 @@ Since no real API, use realistic simulated data that changes slightly on refresh
 - CSS Grid and Flexbox layout
 - RequestAnimationFrame for compass
 - LocalStorage for last location
+
+---
+
+## 6. Task Verification Policy
+
+All tasks must be verified using the following checklist before closing:
+
+### Pre-Close Requirements
+1. **Code Review** - Code reviewed and approved
+2. **Merge to Master** - Changes merged, no conflicts
+3. **Deployment** - Deployed to `https://skypulse-weather.vercel.app`
+4. **Live Site Testing** - Verified working on live site
+5. **Console Check** - No JavaScript errors
+6. **Layout Check** - Renders correctly on all breakpoints
+7. **Feature Check** - All features functional
+
+### QA Testing
+Run the QA tester before closing any task:
+```bash
+node qa-tester.js
+```
+
+### Documentation
+- See `VERIFICATION_CHECKLIST.md` for detailed checklist
+- QA tester includes deployment verification (fetches live URL)
+- All future tasks must follow this process
