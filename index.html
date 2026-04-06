@@ -652,6 +652,63 @@
         .risk-low { color: var(--safe-emerald); }
         .risk-high { color: var(--accent-amber); }
 
+
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            margin-top: 4px;
+            max-height: 240px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+        }
+
+        .search-suggestions.visible {
+            display: block;
+        }
+
+        .search-suggestion {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-card);
+            transition: background 0.2s ease;
+        }
+
+        .search-suggestion:last-child {
+            border-bottom: none;
+        }
+
+        .search-suggestion:hover {
+            background: rgba(34, 211, 238, 0.1);
+        }
+
+        .search-suggestion-name {
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+
+        .search-suggestion-country {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .search-error {
+            padding: 12px 16px;
+            color: var(--warning-red);
+            font-size: 0.875rem;
+        }
+
+        .search-loading {
+            padding: 12px 16px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+
         .flight-condition-card {
             background: var(--bg-card);
             border: 1px solid var(--border-card);
@@ -907,6 +964,9 @@
             </div>
             
             <div class="search-container">
+                <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+                <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację..." autocomplete="off">
+                <div class="search-suggestions" id="searchSuggestions"></div>
                 <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację...">
                 <select class="popular-takeoffs-select" id="takeoffSelect">
                     <option value="">Popularne starty</option>
@@ -1291,6 +1351,58 @@
             }
         };
 
+        const GeocodingClient = {
+            BASE_URL: 'https://geocoding-api.open-meteo.com/v1/search',
+
+            async searchLocations(query) {
+                if (!query || query.length < 2) {
+                    return [];
+                }
+
+                const params = new URLSearchParams({
+                    name: query,
+                    count: 8,
+                    language: 'pl',
+                    format: 'json'
+                });
+
+                const url = `${this.BASE_URL}?${params.toString()}`;
+
+                try {
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Geocoding API error: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (!data.results || data.results.length === 0) {
+                        return [];
+                    }
+                    
+                    return data.results.map(result => ({
+                        name: result.name,
+                        country: result.country || '',
+                        admin1: result.admin1 || '',
+                        latitude: result.latitude,
+                        longitude: result.longitude,
+                        displayName: this.formatDisplayName(result)
+                    }));
+                } catch (error) {
+                    console.error('Geocoding search failed:', error);
+                    throw error;
+                }
+            },
+
+            formatDisplayName(result) {
+                const parts = [result.name];
+                if (result.admin1) parts.push(result.admin1);
+                if (result.country) parts.push(result.country);
+                return parts.join(', ');
+            }
+        };
+
         const locations = {
             'bialystok': { name: 'Białystok, Polska', lat: 53.1325, lng: 23.1593 },
             'bled': { name: 'Bled, Słowenia', lat: 46.3625, lng: 14.0939 },
@@ -1310,6 +1422,8 @@
         let currentLocation = 'bialystok';
         let weatherData = new WeatherData();
         let useApiData = true;
+        let searchTimeout = null;
+        let currentSearchResults = [];
 
         function randomVariation(base, percent) {
             const variation = base * percent;
@@ -1361,7 +1475,7 @@
 
         async function loadWeatherFromApi(locationKey) {
             const location = locations[locationKey];
-            if (!location) {
+            if (!location || !location.lat || !location.lng) {
                 return generateWeatherData(locationKey);
             }
             
@@ -1643,15 +1757,85 @@
             setTimeout(() => this.classList.remove('spinning'), 1000);
         });
 
+        document.getElementById('locationSearch').addEventListener('input', async function(e) {
+            const query = this.value.trim();
+            const suggestionsEl = document.getElementById('searchSuggestions');
+            
+            clearTimeout(searchTimeout);
+            
+            if (query.length < 2) {
+                suggestionsEl.classList.remove('visible');
+                currentSearchResults = [];
+                return;
+            }
+
+            suggestionsEl.innerHTML = '<div class="search-loading">Szukam lokalizacji...</div>';
+            suggestionsEl.classList.add('visible');
+
+            searchTimeout = setTimeout(async () => {
+                try {
+                    const results = await GeocodingClient.searchLocations(query);
+                    currentSearchResults = results;
+                    
+                    if (results.length === 0) {
+                        suggestionsEl.innerHTML = '<div class="search-error">Nie znaleziono lokalizacji</div>';
+                        return;
+                    }
+
+                    suggestionsEl.innerHTML = results.map((loc, index) => `
+                        <div class="search-suggestion" data-index="${index}">
+                            <div class="search-suggestion-name">${loc.displayName}</div>
+                        </div>
+                    `).join('');
+
+                    suggestionsEl.querySelectorAll('.search-suggestion').forEach(el => {
+                        el.addEventListener('click', async function() {
+                            const index = parseInt(this.dataset.index);
+                            const selected = currentSearchResults[index];
+                            await selectLocation(selected);
+                        });
+                    });
+                } catch (error) {
+                    suggestionsEl.innerHTML = '<div class="search-error">Błąd wyszukiwania. Spróbuj ponownie.</div>';
+                }
+            }, 300);
+        });
+
         document.getElementById('locationSearch').addEventListener('keypress', async function(e) {
             if (e.key === 'Enter') {
                 const query = this.value.toLowerCase().trim();
                 if (locations[query]) {
                     currentLocation = query;
                     await loadWeather();
+                } else if (currentSearchResults.length > 0) {
+                    await selectLocation(currentSearchResults[0]);
                 }
             }
         });
+
+        document.addEventListener('click', function(e) {
+            const searchContainer = document.querySelector('.search-container');
+            const suggestionsEl = document.getElementById('searchSuggestions');
+            if (!searchContainer.contains(e.target)) {
+                suggestionsEl.classList.remove('visible');
+            }
+        });
+
+        async function selectLocation(location) {
+            const locationKey = location.displayName;
+            locations[locationKey] = {
+                name: location.displayName,
+                lat: location.latitude,
+                lng: location.longitude
+            };
+            currentLocation = locationKey;
+            
+            const searchInput = document.getElementById('locationSearch');
+            searchInput.value = location.displayName;
+            document.getElementById('searchSuggestions').classList.remove('visible');
+            
+            await loadWeather();
+        }
 
         document.getElementById('takeoffSelect').addEventListener('change', async function() {
             const selectedLocation = this.value;
