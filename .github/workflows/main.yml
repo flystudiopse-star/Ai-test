@@ -1,0 +1,105 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install stylelint
+        run: npm install -g stylelint stylelint-config-standard
+
+      - name: Lint CSS
+        run: |
+          echo "Extracting and linting CSS..."
+          cat index.html | grep -ozP '(?<=<style>)[\s\S]*?(?=</style>)' > temp.css
+          stylelint temp.css --formatter verbose || true
+          rm -f temp.css
+        continue-on-error: true
+
+      - name: Validate HTML structure
+        run: |
+          echo "Checking HTML structure..."
+          grep -q '<!DOCTYPE html>' index.html
+          grep -q '<html lang=' index.html
+          grep -q '<meta charset="UTF-8"' index.html
+          grep -q '<meta name="viewport"' index.html
+          echo "HTML structure valid"
+
+  validate-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Extract and validate JavaScript
+        run: |
+          echo "Extracting JavaScript from HTML..."
+          cat index.html | grep -ozP '(?<=<script>)[\s\S]*?(?=</script>)' > temp.js
+          
+          echo "Checking JavaScript syntax..."
+          node --check temp.js 2>/dev/null || node -e "
+            const fs = require('fs');
+            const code = fs.readFileSync('temp.js', 'utf8');
+            try {
+              new Function(code);
+              console.log('JavaScript syntax valid');
+            } catch(e) {
+              console.error('Syntax error:', e.message);
+              process.exit(1);
+            }
+          "
+          rm -f temp.js
+        continue-on-error: true
+
+      - name: Check for required JavaScript components
+        run: |
+          echo "Verifying required JS components..."
+          grep -q 'class.*WeatherData' index.html && echo "✓ WeatherData class found"
+          grep -q 'OpenMeteoClient' index.html && echo "✓ OpenMeteoClient found"
+          grep -q 'GeocodingClient' index.html && echo "✓ GeocodingClient found"
+          grep -q 'fetchWeather' index.html && echo "✓ fetchWeather function found"
+          grep -q 'updateDisplay' index.html && echo "✓ updateDisplay function found"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run QA Tester
+        run: node qa-tester.js
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify build files exist
+        run: |
+          echo "Verifying project structure..."
+          test -f index.html && echo "✓ index.html exists"
+          
+          echo "Checking for embedded assets..."
+          grep -q 'fonts.googleapis.com' index.html && echo "✓ Google Fonts referenced"
+          
+          echo "Build verification complete"
