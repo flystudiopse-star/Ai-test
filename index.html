@@ -883,13 +883,13 @@
             
             <div class="search-container">
                 <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację...">
+                <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację (np. Białystok)...">
             </div>
         </header>
 
         <section class="hero">
             <div class="hero-content">
-                <h2><span class="location-name" id="locationName">Bled, Słowenia</span></h2>
+                <h2><span class="location-name" id="locationName">Białystok, Polska</span></h2>
                 <p class="conditions-summary" id="conditionsSummary">Warunki idealne do lotu</p>
                 <div class="condition-badge flyable" id="conditionBadge">
                     <span>LOTOWY</span>
@@ -1257,6 +1257,7 @@
         };
 
         const locations = {
+            'bialystok': { name: 'Białystok, Polska', lat: 53.1325, lng: 23.1593 },
             'bled': { name: 'Bled, Słowenia', lat: 46.3625, lng: 14.0939 },
             'interlaken': { name: 'Interlaken, Szwajcaria', lat: 46.6863, lng: 7.8632 },
             'alpe-dhuez': { name: 'Alpe d\'Huez, Francja', lat: 45.0914, lng: 6.0689 },
@@ -1264,7 +1265,7 @@
             'olsberg': { name: 'Olsberg, Niemcy', lat: 51.3565, lng: 8.4897 }
         };
 
-        let currentLocation = 'bled';
+        let currentLocation = 'bialystok';
         let weatherData = new WeatherData();
         let useApiData = true;
 
