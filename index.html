@@ -680,7 +680,7 @@
                     <span class="weather-card-label">Temp</span>
                 </div>
                 <div class="weather-card-value"><span id="temperature">22</span><span class="weather-card-unit">°C</span></div>
-                <div class="weather-card-trend trend-neutral" id="tempTrend">—</div>
+                <div class="weather-card-trend trend-neutral" id="tempTrend">Odczuwalna: <span id="feelsLike">20</span>°C</div>
             </div>
 
             <div class="weather-card">
@@ -726,6 +726,15 @@
                 </div>
                 <div class="weather-card-value"><span id="visibility">15</span><span class="weather-card-unit">km</span></div>
                 <div class="weather-card-trend trend-up" id="visibilityTrend">Bardzo dobra</div>
+            </div>
+
+            <div class="weather-card">
+                <div class="weather-card-header">
+                    <svg class="weather-card-icon" viewBox="0 0 24 24"><path d="M12 2c-5.33 4.55-8 8.48-8 11.8 0 4.98 3.8 8.2 8 8.2s8-3.22 8-8.2c0-3.32-2.67-7.25-8-11.8z"/></svg>
+                    <span class="weather-card-label">Opady</span>
+                </div>
+                <div class="weather-card-value"><span id="precipitation">0</span><span class="weather-card-unit">%</span></div>
+                <div class="weather-card-trend trend-neutral" id="precipTrend">Brak opadów</div>
             </div>
         </section>
 
@@ -801,6 +810,7 @@
         class WeatherData {
             constructor(data = {}) {
                 this.temperature = data.temperature ?? 0;
+                this.feelsLike = data.feelsLike ?? 0;
                 this.windSpeed = data.windSpeed ?? 0;
                 this.windDirection = data.windDirection ?? 'N';
                 this.windGusts = data.windGusts ?? 0;
@@ -830,12 +840,14 @@
                 const precip = current.precipitation ?? 0;
                 const cloudCover = current.cloud_cover ?? 0;
                 const weatherCode = current.weather_code ?? 0;
+                const apparentTemp = current.apparent_temperature ?? temp;
                 
                 const dewPointSpread = temp - dewPoint;
                 const cloudBase = Math.max(300, 3000 - (cloudCover * 25) - (temp * 20));
                 
                 return new WeatherData({
                     temperature: Math.round(temp * 10) / 10,
+                    feelsLike: Math.round(apparentTemp * 10) / 10,
                     windSpeed: Math.round(windSpeed),
                     windDirection: OpenMeteoClient.degreesToCompass(windDir),
                     windGusts: Math.round(windGusts),
@@ -854,6 +866,7 @@
             toJSON() {
                 return {
                     temperature: this.temperature,
+                    feelsLike: this.feelsLike,
                     windSpeed: this.windSpeed,
                     windDirection: this.windDirection,
                     windGusts: this.windGusts,
@@ -986,6 +999,7 @@
             const base = locationData ? 18 : 20;
             
             const temp = Math.round(randomVariation(base, 0.1));
+            const feelsLike = Math.round(randomVariation(temp - 1, 0.3));
             const windSpeed = Math.round(randomVariation(12, 0.4));
             const windGusts = windSpeed + Math.round(randomVariation(6, 0.5));
             const humidity = Math.round(randomVariation(45, 0.2));
@@ -996,6 +1010,7 @@
 
             return new WeatherData({
                 temperature: temp,
+                feelsLike: feelsLike,
                 windSpeed: windSpeed,
                 windGusts: windGusts,
                 humidity: humidity,
@@ -1005,7 +1020,8 @@
                 dewPointSpread: dewPointSpread,
                 windDirection: getWindDirection(windSpeed),
                 thermalActivity: getThermalActivity(windSpeed, humidity),
-                thermalVelocity: Math.round(randomVariation(2.5, 0.4))
+                thermalVelocity: Math.round(randomVariation(2.5, 0.4)),
+                precipitation: 0
             });
         }
 
@@ -1049,12 +1065,14 @@
 
             locationName.textContent = locations[currentLocation]?.name || currentLocation;
             document.getElementById('temperature').textContent = data.temperature;
+            document.getElementById('feelsLike').textContent = data.feelsLike ?? data.temperature - 1;
             document.getElementById('windSpeed').textContent = data.windSpeed;
             document.getElementById('windSpeedDisplay').textContent = data.windSpeed;
             document.getElementById('windGusts').textContent = data.windGusts;
             document.getElementById('humidity').textContent = data.humidity;
             document.getElementById('pressure').textContent = data.pressure;
             document.getElementById('visibility').textContent = data.visibility;
+            document.getElementById('precipitation').textContent = Math.round(data.precipitation * 10);
             document.getElementById('cloudBase').textContent = data.cloudBase;
             document.getElementById('dewPointSpread').textContent = data.dewPointSpread;
             document.getElementById('windDirection').textContent = data.windDirection;
@@ -1076,6 +1094,7 @@
             const directionDegrees = (data.windSpeed * 10) % 360;
             compassArrow.style.transform = `translate(-50%, -100%) rotate(${directionDegrees}deg)`;
 
+            updatePrecipTrend(data.precipitation);
             updateThermalDisplay(data.thermalActivity);
             updateCondensationRisk(data.dewPointSpread);
 
@@ -1121,6 +1140,24 @@
             } else {
                 riskElement.textContent = 'Wysokie ryzyko kondensacji';
                 riskElement.className = 'risk risk-high';
+            }
+        }
+
+        function updatePrecipTrend(precip) {
+            const precipElement = document.getElementById('precipTrend');
+            const precipValue = Math.round(precip * 10);
+            if (precipValue === 0) {
+                precipElement.textContent = 'Brak opadów';
+                precipElement.className = 'weather-card-trend trend-neutral';
+            } else if (precipValue < 30) {
+                precipElement.textContent = 'Niewielkie';
+                precipElement.className = 'weather-card-trend trend-down';
+            } else if (precipValue < 70) {
+                precipElement.textContent = 'Umiarkowane';
+                precipElement.className = 'weather-card-trend trend-down';
+            } else {
+                precipElement.textContent = 'Silne';
+                precipElement.className = 'weather-card-trend trend-down';
             }
         }
 
