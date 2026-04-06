@@ -35,6 +35,7 @@
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
+            overflow-x: hidden;
         }
 
         .background-mesh {
@@ -60,6 +61,7 @@
             max-width: 1200px;
             margin: 0 auto;
             padding: 24px 20px;
+            overflow-x: hidden;
         }
 
         header {
@@ -260,6 +262,31 @@
                 justify-items: center;
                 text-align: center;
             }
+
+            .compass-container {
+                width: 180px;
+                height: 180px;
+            }
+        }
+
+        @media (max-width: 640px) {
+            header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .logo {
+                justify-content: center;
+            }
+
+            .search-container {
+                flex-direction: column;
+                max-width: 100%;
+            }
+
+            .popular-takeoffs-select {
+                width: 100%;
+            }
         }
 
         .hero-content h2 {
@@ -425,6 +452,26 @@
             }
         }
 
+        @media (max-width: 480px) {
+            .weather-card-value {
+                font-size: 1.5rem;
+            }
+
+            .hero-content h2 {
+                font-size: 1.75rem;
+            }
+
+            .condition-badge {
+                font-size: 0.9rem;
+                padding: 10px 16px;
+            }
+
+            .compass-container {
+                width: 160px;
+                height: 160px;
+            }
+        }
+
         .weather-card {
             background: var(--bg-card);
             border: 1px solid var(--border-card);
@@ -572,8 +619,20 @@
         }
 
         @media (max-width: 640px) {
-            .special-cards {
-                grid-template-columns: 1fr;
+            .thermal-section {
+                padding: 16px;
+            }
+
+            .thermal-bar {
+                height: 60px;
+            }
+
+            .flight-condition-rating {
+                flex-direction: column;
+            }
+
+            .rating-item {
+                flex-direction: row;
             }
         }
 
@@ -587,6 +646,13 @@
             border-top: 1px solid var(--border-card);
             color: var(--text-secondary);
             font-size: 0.875rem;
+        }
+
+        @media (max-width: 640px) {
+            footer {
+                flex-direction: column;
+                text-align: center;
+            }
         }
 
         .refresh-btn {
