@@ -148,6 +148,84 @@
             fill: var(--text-secondary);
         }
 
+        .search-suggestions {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: var(--bg-card);
+            border: 1px solid var(--border-card);
+            border-radius: 12px;
+            margin-top: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            z-index: 100;
+            display: none;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .search-suggestions.visible {
+            display: block;
+        }
+
+        .suggestion-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-card);
+            transition: all 0.2s ease;
+        }
+
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+
+        .suggestion-item:hover {
+            background: rgba(34, 211, 238, 0.1);
+            border-left: 3px solid var(--accent-cyan);
+        }
+
+        .suggestion-name {
+            font-family: var(--font-body);
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .suggestion-country {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .suggestion-coords {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            opacity: 0.7;
+        }
+
+        .suggestion-error {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .suggestion-loading {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .suggestion-empty {
+            padding: 16px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
         .hero {
             display: grid;
             grid-template-columns: 1fr auto;
@@ -883,7 +961,8 @@
             
             <div class="search-container">
                 <svg class="search-icon" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację...">
+                <input type="text" class="search-input" id="locationSearch" placeholder="Wyszukaj lokalizację..." autocomplete="off">
+                <div class="search-suggestions" id="searchSuggestions"></div>
             </div>
         </header>
 
@@ -1256,6 +1335,54 @@
             }
         };
 
+        const GeocodingClient = {
+            BASE_URL: 'https://geocoding-api.open-meteo.com/v1/search',
+            MIN_CHARS: 2,
+            debounceTimer: null,
+
+            async searchLocations(query) {
+                if (!query || query.length < this.MIN_CHARS) {
+                    return { results: [] };
+                }
+
+                const params = new URLSearchParams({
+                    name: query,
+                    count: 10,
+                    language: 'pl',
+                    format: 'json'
+                });
+
+                const url = `${this.BASE_URL}?${params.toString()}`;
+                
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) {
+                        throw new Error(`Geocoding API error: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    return data;
+                } catch (error) {
+                    console.error('Geocoding search failed:', error);
+                    return { results: null, error: error.message };
+                }
+            },
+
+            formatResults(data) {
+                if (!data || !data.results || data.results.length === 0) {
+                    return [];
+                }
+
+                return data.results.map(result => ({
+                    name: result.name,
+                    country: result.country || '',
+                    admin1: result.admin1 || '',
+                    lat: result.latitude,
+                    lng: result.longitude,
+                    displayName: `${result.name}${result.admin1 ? ', ' + result.admin1 : ''}${result.country ? ', ' + result.country : ''}`
+                }));
+            }
+        };
+
         const locations = {
             'bialystok': { name: 'Białystok, Polska', lat: 53.1325, lng: 23.1593 },
             'bled': { name: 'Bled, Słowenia', lat: 46.3625, lng: 14.0939 },
@@ -1430,7 +1557,11 @@
             const locationName = document.getElementById('locationName');
             const condition = assessConditions(data);
 
-            locationName.textContent = locations[currentLocation]?.name || currentLocation;
+            if (currentLocation === 'custom' && customLocationData) {
+                locationName.textContent = customLocationData.name;
+            } else {
+                locationName.textContent = locations[currentLocation]?.name || currentLocation;
+            }
             document.getElementById('temperature').textContent = data.temperature;
             document.getElementById('feelsLike').textContent = data.feelsLike ?? data.temperature - 1;
             document.getElementById('windSpeed').textContent = data.windSpeed;
@@ -1585,7 +1716,15 @@
         }
 
         async function loadWeather() {
-            if (useApiData) {
+            if (currentLocation === 'custom' && customLocationData) {
+                previousWeatherData = weatherData;
+                try {
+                    weatherData = await OpenMeteoClient.fetchWeather(customLocationData.lat, customLocationData.lng);
+                } catch (error) {
+                    console.warn('API fetch failed, using simulated data:', error);
+                    weatherData = generateWeatherData(currentLocation);
+                }
+            } else if (useApiData) {
                 previousWeatherData = weatherData;
                 weatherData = await loadWeatherFromApi(currentLocation);
             } else {
@@ -1601,15 +1740,88 @@
             setTimeout(() => this.classList.remove('spinning'), 1000);
         });
 
-        document.getElementById('locationSearch').addEventListener('keypress', async function(e) {
-            if (e.key === 'Enter') {
-                const query = this.value.toLowerCase().trim();
-                if (locations[query]) {
-                    currentLocation = query;
-                    await loadWeather();
+        document.getElementById('locationSearch').addEventListener('input', async function() {
+            const query = this.value.trim();
+            const suggestionsContainer = document.getElementById('searchSuggestions');
+            
+            if (query.length < 2) {
+                suggestionsContainer.classList.remove('visible');
+                return;
+            }
+
+            if (GeocodingClient.debounceTimer) {
+                clearTimeout(GeocodingClient.debounceTimer);
+            }
+
+            GeocodingClient.debounceTimer = setTimeout(async () => {
+                suggestionsContainer.innerHTML = '<div class="suggestion-loading">Szukanie...</div>';
+                suggestionsContainer.classList.add('visible');
+
+                const results = await GeocodingClient.searchLocations(query);
+                
+                if (results.error) {
+                    suggestionsContainer.innerHTML = `<div class="suggestion-error">Błąd sieciowy. Spróbuj ponownie.</div>`;
+                    return;
                 }
+
+                const formattedResults = GeocodingClient.formatResults(results);
+
+                if (formattedResults.length === 0) {
+                    suggestionsContainer.innerHTML = '<div class="suggestion-empty">Brak wyników wyszukiwania</div>';
+                    return;
+                }
+
+                suggestionsContainer.innerHTML = formattedResults.map(loc => `
+                    <div class="suggestion-item" data-lat="${loc.lat}" data-lng="${loc.lng}" data-name="${loc.displayName}">
+                        <div class="suggestion-name">${loc.name}</div>
+                        <div class="suggestion-country">${loc.admin1 ? loc.admin1 + ', ' : ''}${loc.country}</div>
+                        <div class="suggestion-coords">${loc.lat.toFixed(4)}°, ${loc.lng.toFixed(4)}°</div>
+                    </div>
+                `).join('');
+            }, 300);
+        });
+
+        document.getElementById('searchSuggestions').addEventListener('click', async function(e) {
+            const item = e.target.closest('.suggestion-item');
+            if (!item) return;
+
+            const lat = parseFloat(item.dataset.lat);
+            const lng = parseFloat(item.dataset.lng);
+            const name = item.dataset.name;
+
+            currentLocation = 'custom';
+            customLocationData = { name: name, lat: lat, lng: lng };
+
+            document.getElementById('locationSearch').value = name;
+            document.getElementById('searchSuggestions').classList.remove('visible');
+
+            await loadWeatherForCoordinates(lat, lng, name);
+        });
+
+        document.addEventListener('click', function(e) {
+            const searchContainer = document.querySelector('.search-container');
+            const suggestions = document.getElementById('searchSuggestions');
+            if (!searchContainer.contains(e.target)) {
+                suggestions.classList.remove('visible');
             }
         });
+
+        let customLocationData = null;
+
+        async function loadWeatherForCoordinates(lat, lng, locationName) {
+            document.getElementById('locationName').textContent = locationName;
+            
+            try {
+                const data = await OpenMeteoClient.fetchWeather(lat, lng);
+                weatherData = data;
+                useApiData = true;
+                updateDisplay();
+            } catch (error) {
+                console.warn('API fetch failed for custom location:', error);
+                weatherData = generateWeatherData('custom');
+                updateDisplay();
+            }
+        }
 
         loadWeather();
 
