@@ -782,6 +782,188 @@
     </div>
 
     <script>
+        const WeatherSchema = {
+            TEMPERATURE: 'temperature',
+            WIND_SPEED: 'windSpeed',
+            WIND_DIRECTION: 'windDirection',
+            WIND_GUSTS: 'windGusts',
+            HUMIDITY: 'humidity',
+            PRESSURE: 'pressure',
+            VISIBILITY: 'visibility',
+            CLOUD_BASE: 'cloudBase',
+            DEW_POINT_SPREAD: 'dewPointSpread',
+            THERMAL_ACTIVITY: 'thermalActivity',
+            THERMAL_VELOCITY: 'thermalVelocity',
+            PRECIPITATION: 'precipitation',
+            WEATHER_CONDITION: 'weatherCondition'
+        };
+
+        class WeatherData {
+            constructor(data = {}) {
+                this.temperature = data.temperature ?? 0;
+                this.windSpeed = data.windSpeed ?? 0;
+                this.windDirection = data.windDirection ?? 'N';
+                this.windGusts = data.windGusts ?? 0;
+                this.humidity = data.humidity ?? 0;
+                this.pressure = data.pressure ?? 1013;
+                this.visibility = data.visibility ?? 10;
+                this.cloudBase = data.cloudBase ?? 1000;
+                this.dewPointSpread = data.dewPointSpread ?? 5;
+                this.thermalActivity = data.thermalActivity ?? 'moderate';
+                this.thermalVelocity = data.thermalVelocity ?? 2;
+                this.precipitation = data.precipitation ?? 0;
+                this.weatherCondition = data.weatherCondition ?? 'clear';
+                this.lastUpdated = data.lastUpdated ?? new Date();
+            }
+
+            static createFromOpenMeteo(apiData) {
+                const current = apiData.current ?? {};
+                const daily = apiData.daily ?? {};
+                
+                const temp = current.temperature_2m ?? 20;
+                const humidity = current.relative_humidity_2m ?? 50;
+                const dewPoint = current.dew_point_2m ?? 10;
+                const pressure = current.surface_pressure ?? 1013;
+                const windSpeed = current.wind_speed_10m ?? 0;
+                const windGusts = current.wind_gusts_10m ?? 0;
+                const windDir = current.wind_direction_10m ?? 0;
+                const precip = current.precipitation ?? 0;
+                const cloudCover = current.cloud_cover ?? 0;
+                const weatherCode = current.weather_code ?? 0;
+                
+                const dewPointSpread = temp - dewPoint;
+                const cloudBase = Math.max(300, 3000 - (cloudCover * 25) - (temp * 20));
+                
+                return new WeatherData({
+                    temperature: Math.round(temp * 10) / 10,
+                    windSpeed: Math.round(windSpeed),
+                    windDirection: OpenMeteoClient.degreesToCompass(windDir),
+                    windGusts: Math.round(windGusts),
+                    humidity: humidity,
+                    pressure: Math.round(pressure),
+                    visibility: OpenMeteoClient.calculateVisibility(cloudCover, precip),
+                    cloudBase: Math.round(cloudBase / 100) * 100,
+                    dewPointSpread: Math.round(dewPointSpread * 10) / 10,
+                    thermalActivity: OpenMeteoClient.calculateThermalActivity(temp, humidity, windSpeed),
+                    thermalVelocity: Math.round(OpenMeteoClient.calculateThermalVelocity(temp, humidity) * 10) / 10,
+                    precipitation: precip,
+                    weatherCondition: OpenMeteoClient.getWeatherCondition(weatherCode)
+                });
+            }
+
+            toJSON() {
+                return {
+                    temperature: this.temperature,
+                    windSpeed: this.windSpeed,
+                    windDirection: this.windDirection,
+                    windGusts: this.windGusts,
+                    humidity: this.humidity,
+                    pressure: this.pressure,
+                    visibility: this.visibility,
+                    cloudBase: this.cloudBase,
+                    dewPointSpread: this.dewPointSpread,
+                    thermalActivity: this.thermalActivity,
+                    thermalVelocity: this.thermalVelocity,
+                    precipitation: this.precipitation,
+                    weatherCondition: this.weatherCondition,
+                    lastUpdated: this.lastUpdated
+                };
+            }
+        }
+
+        const OpenMeteoClient = {
+            BASE_URL: 'https://api.open-meteo.com/v1/forecast',
+            
+            async fetchWeather(lat, lng) {
+                const params = new URLSearchParams({
+                    latitude: lat.toFixed(4),
+                    longitude: lng.toFixed(4),
+                    current: [
+                        'temperature_2m',
+                        'relative_humidity_2m',
+                        'apparent_temperature',
+                        'precipitation',
+                        'weather_code',
+                        'cloud_cover',
+                        'surface_pressure',
+                        'wind_speed_10m',
+                        'wind_direction_10m',
+                        'wind_gusts_10m',
+                        'dew_point_2m'
+                    ].join(','),
+                    daily: ['weather_code', 'temperature_2m_max', 'temperature_2m_min'].join(','),
+                    timezone: 'auto',
+                    forecast_days: 1
+                });
+                
+                const url = `${this.BASE_URL}?${params.toString()}`;
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return WeatherData.createFromOpenMeteo(data);
+            },
+
+            degreesToCompass(degrees) {
+                const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 
+                                 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
+                const index = Math.round(degrees / 22.5) % 16;
+                return directions[index];
+            },
+
+            calculateVisibility(cloudCover, precipitation) {
+                let visibility = 20;
+                if (cloudCover > 70) visibility -= 5;
+                if (cloudCover > 90) visibility -= 5;
+                visibility -= precipitation * 2;
+                return Math.max(1, Math.round(visibility));
+            },
+
+            calculateThermalActivity(temp, humidity, windSpeed) {
+                if (humidity < 40 && windSpeed < 20 && temp > 15) return 'strong';
+                if (humidity < 55 && windSpeed < 30 && temp > 10) return 'moderate';
+                return 'weak';
+            },
+
+            calculateThermalVelocity(temp, humidity) {
+                const base = 2.0;
+                const tempFactor = Math.max(0, (temp - 10) / 20);
+                const humidityFactor = 1 - (humidity / 100);
+                return base + (tempFactor * humidityFactor * 3);
+            },
+
+            getWeatherCondition(code) {
+                const conditions = {
+                    0: 'clear',
+                    1: 'clear',
+                    2: 'partly_cloudy',
+                    3: 'cloudy',
+                    45: 'fog',
+                    48: 'fog',
+                    51: 'drizzle',
+                    53: 'drizzle',
+                    55: 'drizzle',
+                    61: 'rain',
+                    63: 'rain',
+                    65: 'rain',
+                    71: 'snow',
+                    73: 'snow',
+                    75: 'snow',
+                    77: 'snow',
+                    80: 'rain_showers',
+                    81: 'rain_showers',
+                    82: 'rain_showers',
+                    95: 'thunderstorm',
+                    96: 'thunderstorm',
+                    99: 'thunderstorm'
+                };
+                return conditions[code] ?? 'clear';
+            }
+        };
+
         const locations = {
             'bled': { name: 'Bled, Słowenia', lat: 46.3625, lng: 14.0939 },
             'interlaken': { name: 'Interlaken, Szwajcaria', lat: 46.6863, lng: 7.8632 },
@@ -791,7 +973,8 @@
         };
 
         let currentLocation = 'bled';
-        let weatherData = {};
+        let weatherData = new WeatherData();
+        let useApiData = true;
 
         function randomVariation(base, percent) {
             const variation = base * percent;
@@ -811,7 +994,7 @@
             const cloudBase = Math.round(randomVariation(1200, 0.25));
             const dewPointSpread = Math.round(randomVariation(8, 0.3));
 
-            return {
+            return new WeatherData({
                 temperature: temp,
                 windSpeed: windSpeed,
                 windGusts: windGusts,
@@ -823,7 +1006,7 @@
                 windDirection: getWindDirection(windSpeed),
                 thermalActivity: getThermalActivity(windSpeed, humidity),
                 thermalVelocity: Math.round(randomVariation(2.5, 0.4))
-            };
+            });
         }
 
         function getWindDirection(speed) {
@@ -836,6 +1019,21 @@
             if (humidity < 40 && wind < 20) return 'strong';
             if (humidity < 55 && wind < 30) return 'moderate';
             return 'weak';
+        }
+
+        async function loadWeatherFromApi(locationKey) {
+            const location = locations[locationKey];
+            if (!location) {
+                return generateWeatherData(locationKey);
+            }
+            
+            try {
+                const data = await OpenMeteoClient.fetchWeather(location.lat, location.lng);
+                return data;
+            } catch (error) {
+                console.warn('API fetch failed, using simulated data:', error);
+                return generateWeatherData(locationKey);
+            }
         }
 
         function assessConditions(data) {
@@ -860,7 +1058,13 @@
             document.getElementById('cloudBase').textContent = data.cloudBase;
             document.getElementById('dewPointSpread').textContent = data.dewPointSpread;
             document.getElementById('windDirection').textContent = data.windDirection;
-            document.getElementById('conditionsSummary').getAttribute('textContent') || '';
+
+            const summaryText = data.weatherCondition === 'clear' ? 'Czyste niebo' :
+                            data.weatherCondition === 'partly_cloudy' ? 'Częściowe zachmurzenie' :
+                            data.weatherCondition === 'cloudy' ? 'Zachmurzone' :
+                            data.weatherCondition === 'rain' ? 'Deszcz' :
+                            data.weatherCondition === 'thunderstorm' ? 'Burza' : 'Warunki zmienne';
+            document.getElementById('conditionsSummary').textContent = summaryText;
 
             const badge = document.getElementById('conditionBadge');
             badge.className = `condition-badge ${condition}`;
@@ -920,23 +1124,27 @@
             }
         }
 
-        function loadWeather() {
-            weatherData = generateWeatherData(currentLocation);
+        async function loadWeather() {
+            if (useApiData) {
+                weatherData = await loadWeatherFromApi(currentLocation);
+            } else {
+                weatherData = generateWeatherData(currentLocation);
+            }
             updateDisplay();
         }
 
-        document.getElementById('refreshBtn').addEventListener('click', function() {
+        document.getElementById('refreshBtn').addEventListener('click', async function() {
             this.classList.add('spinning');
-            loadWeather();
+            await loadWeather();
             setTimeout(() => this.classList.remove('spinning'), 1000);
         });
 
-        document.getElementById('locationSearch').addEventListener('keypress', function(e) {
+        document.getElementById('locationSearch').addEventListener('keypress', async function(e) {
             if (e.key === 'Enter') {
                 const query = this.value.toLowerCase().trim();
                 if (locations[query]) {
                     currentLocation = query;
-                    loadWeather();
+                    await loadWeather();
                 }
             }
         });
