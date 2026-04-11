@@ -834,51 +834,6 @@
         .risk-high { color: var(--accent-amber); }
 
 
-        .search-suggestions {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: var(--bg-card);
-            border: 1px solid var(--border-card);
-            border-radius: 12px;
-            margin-top: 4px;
-            max-height: 240px;
-            overflow-y: auto;
-            z-index: 100;
-            display: none;
-        }
-
-        .search-suggestions.visible {
-            display: block;
-        }
-
-        .search-suggestion {
-            padding: 12px 16px;
-            cursor: pointer;
-            border-bottom: 1px solid var(--border-card);
-            transition: background 0.2s ease;
-        }
-
-        .search-suggestion:last-child {
-            border-bottom: none;
-        }
-
-        .search-suggestion:hover {
-            background: rgba(34, 211, 238, 0.1);
-        }
-
-        .search-suggestion-name {
-            font-size: 0.95rem;
-            color: var(--text-primary);
-            margin-bottom: 2px;
-        }
-
-        .search-suggestion-country {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-
         .search-error {
             padding: 12px 16px;
             color: var(--warning-red);
@@ -1385,10 +1340,92 @@
                 padding: 40px;
                 color: var(--text-secondary);
             }
+
+            .loading-overlay {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(10, 14, 23, 0.7);
+                display: none;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            }
+
+            .loading-overlay.visible {
+                display: flex;
+            }
+
+            .loading-spinner {
+                width: 48px;
+                height: 48px;
+                border: 3px solid var(--border-card);
+                border-top-color: var(--accent-cyan);
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+            }
+
+            .weather-card.loading {
+                opacity: 0.5;
+                pointer-events: none;
+            }
+
+            .toast-container {
+                position: fixed;
+                bottom: 24px;
+                right: 24px;
+                z-index: 2000;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .toast {
+                padding: 12px 20px;
+                border-radius: 8px;
+                font-size: 0.9rem;
+                animation: toastIn 0.3s ease-out;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            }
+
+            .toast.success {
+                background: rgba(16, 185, 129, 0.9);
+                color: white;
+            }
+
+            .toast.error {
+                background: rgba(239, 68, 68, 0.9);
+                color: white;
+            }
+
+            .toast.info {
+                background: rgba(34, 211, 238, 0.9);
+                color: var(--bg-primary);
+            }
+
+            .toast.hiding {
+                animation: toastOut 0.3s ease-in forwards;
+            }
+
+            @keyframes toastIn {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+
+            @keyframes toastOut {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
     </style>
 </head>
 <body>
     <div class="background-mesh"></div>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+    <div class="toast-container" id="toastContainer"></div>
     
     <div class="container">
         <header>
@@ -2251,12 +2288,23 @@
             const container = document.getElementById('windSafetyAlerts');
             const alerts = getWindSafetyAlerts(data);
             
-            container.innerHTML = alerts.map(alert => `
-                <div class="wind-safety-alert ${alert.level}">
-                    <span class="alert-icon">${alert.level === 'danger' ? '⚠' : alert.level === 'warning' ? '⚡' : 'ℹ'}</span>
-                    <span class="alert-text">${alert.text}</span>
-                </div>
-            `).join('');
+            container.innerHTML = '';
+            alerts.forEach(alert => {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `wind-safety-alert ${alert.level}`;
+                
+                const iconSpan = document.createElement('span');
+                iconSpan.className = 'alert-icon';
+                iconSpan.textContent = alert.level === 'danger' ? '⚠' : alert.level === 'warning' ? '⚡' : 'ℹ';
+                
+                const textSpan = document.createElement('span');
+                textSpan.className = 'alert-text';
+                textSpan.textContent = alert.text;
+                
+                alertDiv.appendChild(iconSpan);
+                alertDiv.appendChild(textSpan);
+                container.appendChild(alertDiv);
+            });
         }
 
         function updateBestFlyingHours(data) {
@@ -2345,23 +2393,32 @@
         }
 
         async function loadWeather() {
-            if (currentLocation === 'custom' && customLocationData) {
-                previousWeatherData = weatherData;
-                try {
-                    weatherData = await OpenMeteoClient.fetchWeather(customLocationData.lat, customLocationData.lng);
-                } catch (error) {
-                    console.warn('API fetch failed, using simulated data:', error);
+            showLoading(true);
+            try {
+                if (currentLocation === 'custom' && customLocationData) {
+                    previousWeatherData = weatherData;
+                    try {
+                        weatherData = await OpenMeteoClient.fetchWeather(customLocationData.lat, customLocationData.lng);
+                    } catch (error) {
+                        console.warn('API fetch failed, using simulated data:', error);
+                        showToast('Błąd pobierania danych z API. Używam danych symulowanych.', 'error');
+                        weatherData = generateWeatherData(currentLocation);
+                    }
+                } else if (useApiData) {
+                    previousWeatherData = weatherData;
+                    weatherData = await loadWeatherFromApi(currentLocation);
+                } else {
+                    previousWeatherData = weatherData;
                     weatherData = generateWeatherData(currentLocation);
                 }
-            } else if (useApiData) {
-                previousWeatherData = weatherData;
-                weatherData = await loadWeatherFromApi(currentLocation);
-            } else {
-                previousWeatherData = weatherData;
-                weatherData = generateWeatherData(currentLocation);
+                updateDisplay();
+                loadForecast();
+            } catch (error) {
+                showToast('Błąd ładowania pogody. Spróbuj ponownie.', 'error');
+                console.error('loadWeather error:', error);
+            } finally {
+                showLoading(false);
             }
-            updateDisplay();
-            loadForecast();
         }
 
         document.getElementById('refreshBtn').addEventListener('click', async function() {
@@ -2401,13 +2458,31 @@
                     return;
                 }
 
-                suggestionsContainer.innerHTML = formattedResults.map(loc => `
-                    <div class="suggestion-item" data-lat="${loc.lat}" data-lng="${loc.lng}" data-name="${loc.displayName}">
-                        <div class="suggestion-name">${loc.name}</div>
-                        <div class="suggestion-country">${loc.admin1 ? loc.admin1 + ', ' : ''}${loc.country}</div>
-                        <div class="suggestion-coords">${loc.lat.toFixed(4)}°, ${loc.lng.toFixed(4)}°</div>
-                    </div>
-                `).join('');
+                suggestionsContainer.innerHTML = '';
+                formattedResults.forEach(loc => {
+                    const item = document.createElement('div');
+                    item.className = 'suggestion-item';
+                    item.dataset.lat = loc.lat;
+                    item.dataset.lng = loc.lng;
+                    item.dataset.name = loc.displayName;
+                    
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'suggestion-name';
+                    nameDiv.textContent = loc.name;
+                    
+                    const countryDiv = document.createElement('div');
+                    countryDiv.className = 'suggestion-country';
+                    countryDiv.textContent = (loc.admin1 ? loc.admin1 + ', ' : '') + loc.country;
+                    
+                    const coordsDiv = document.createElement('div');
+                    coordsDiv.className = 'suggestion-coords';
+                    coordsDiv.textContent = `${loc.lat.toFixed(4)}°, ${loc.lng.toFixed(4)}°`;
+                    
+                    item.appendChild(nameDiv);
+                    item.appendChild(countryDiv);
+                    item.appendChild(coordsDiv);
+                    suggestionsContainer.appendChild(item);
+                });
             }, 300);
         });
 
@@ -2421,6 +2496,7 @@
 
             currentLocation = 'custom';
             customLocationData = { name: name, lat: lat, lng: lng };
+            saveCustomLocation(customLocationData);
 
             document.getElementById('locationSearch').value = name;
             document.getElementById('searchSuggestions').classList.remove('visible');
@@ -2436,6 +2512,7 @@
             if (!locationData) return;
 
             currentLocation = selectedValue;
+            saveLastLocation(selectedValue);
             document.getElementById('locationSearch').value = '';
             document.getElementById('searchSuggestions').classList.remove('visible');
 
@@ -2455,9 +2532,93 @@
         let selectedForecastTab = 'hourly';
         let selectedForecastHours = 1;
         let selectedForecastDays = 0;
+        let refreshTimer = null;
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                }, 300);
+            }, 4000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            if (show) {
+                overlay.classList.add('visible');
+            } else {
+                overlay.classList.remove('visible');
+            }
+            document.querySelectorAll('.weather-card').forEach(card => {
+                if (show) {
+                    card.classList.add('loading');
+                } else {
+                    card.classList.remove('loading');
+                }
+            });
+        }
+
+        function saveLastLocation(locationKey) {
+            try {
+                localStorage.setItem('skypulse_last_location', locationKey);
+            } catch (e) {
+                console.warn('Could not save to localStorage:', e);
+            }
+        }
+
+        function getLastLocation() {
+            try {
+                return localStorage.getItem('skypulse_last_location');
+            } catch (e) {
+                console.warn('Could not read from localStorage:', e);
+                return null;
+            }
+        }
+
+        function saveCustomLocation(data) {
+            try {
+                localStorage.setItem('skypulse_last_location', 'custom');
+                localStorage.setItem('skypulse_custom_location', JSON.stringify(data));
+            } catch (e) {
+                console.warn('Could not save to localStorage:', e);
+            }
+        }
+
+        function getCustomLocation() {
+            try {
+                const data = localStorage.getItem('skypulse_custom_location');
+                return data ? JSON.parse(data) : null;
+            } catch (e) {
+                console.warn('Could not read from localStorage:', e);
+                return null;
+            }
+        }
+
+        window.addEventListener('beforeunload', function() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+                refreshTimer = null;
+            }
+        });
 
         async function loadWeatherForCoordinates(lat, lng, locationName) {
             document.getElementById('locationName').textContent = locationName;
+            showLoading(true);
             
             try {
                 const data = await OpenMeteoClient.fetchWeather(lat, lng);
@@ -2467,8 +2628,11 @@
                 loadForecast();
             } catch (error) {
                 console.warn('API fetch failed for custom location:', error);
+                showToast('Błąd pobierania pogody dla tej lokalizacji.', 'error');
                 weatherData = generateWeatherData('custom');
                 updateDisplay();
+            } finally {
+                showLoading(false);
             }
         }
 
@@ -2493,6 +2657,7 @@
                 renderForecast();
             } catch (error) {
                 console.error('Failed to load forecast:', error);
+                showToast('Błąd ładowania prognozy.', 'error');
                 const grid = document.getElementById('forecastGrid');
                 grid.innerHTML = '<div class="forecast-error">Błąd ładowania prognozy. Spróbuj ponownie.</div>';
             }
@@ -2685,9 +2850,32 @@
             });
         });
 
-        loadWeather();
+        refreshTimer = setInterval(loadWeather, 300000);
 
-        setInterval(loadWeather, 300000);
+        function restoreLastLocation() {
+            const lastLocation = getLastLocation();
+            if (lastLocation === 'custom') {
+                const customLoc = getCustomLocation();
+                if (customLoc) {
+                    currentLocation = 'custom';
+                    customLocationData = customLoc;
+                    document.getElementById('locationSearch').value = customLoc.name;
+                    loadWeatherForCoordinates(customLoc.lat, customLoc.lng, customLoc.name);
+                    return true;
+                }
+            } else if (lastLocation && locations[lastLocation]) {
+                currentLocation = lastLocation;
+                document.getElementById('takeoffSelect').value = lastLocation;
+                const locData = locations[lastLocation];
+                loadWeatherForCoordinates(locData.lat, locData.lng, locData.name);
+                return true;
+            }
+            return false;
+        }
+
+        if (!restoreLastLocation()) {
+            loadWeather();
+        }
     </script>
 </body>
 </html>
